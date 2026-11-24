@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.By;
-import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
@@ -18,17 +17,20 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+
 public class BrowserTest {
 
     private WebDriver driver;
+    private MtsPage mtsPage;
     private WebDriverWait wait;
-
-    private final By paymentBlockLocator = By.xpath("//section[@class='pay']");
 
     @BeforeEach
     public void setUp() {
         driver = new ChromeDriver();
-        wait = new WebDriverWait(driver, Duration.ofSeconds(30));
+        mtsPage = new MtsPage(driver);
+        wait = new WebDriverWait(driver, Duration.ofSeconds(40));
 
         driver.get("https://www.mts.by/");
         acceptCookiesIfVisible();
@@ -53,56 +55,18 @@ public class BrowserTest {
         }
     }
 
-    private WebElement scrollToPaymentBlock() {
-        WebElement paymentBlock = wait.until(
-                ExpectedConditions.visibilityOfElementLocated(
-                        paymentBlockLocator
-                )
+    private void fillPaymentForm() {
+        mtsPage.fillPaymentForm(
+                "297777777",
+                "10",
+                "test@example.com"
         );
-
-        ((JavascriptExecutor) driver).executeScript(
-                "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});",
-                paymentBlock
-        );
-
-        return paymentBlock;
-    }
-
-    private WebElement fillPaymentForm() {
-        WebElement paymentBlock = scrollToPaymentBlock();
-
-        WebElement phoneField = paymentBlock.findElement(
-                By.id("connection-phone")
-        );
-
-        WebElement sumField = paymentBlock.findElement(
-                By.id("connection-sum")
-        );
-
-        WebElement emailField = paymentBlock.findElement(
-                By.id("connection-email")
-        );
-
-        phoneField.sendKeys("297777777");
-        sumField.sendKeys("10");
-        emailField.sendKeys("test@example.com");
-
-        Assertions.assertEquals("(29)777-77-77", phoneField.getAttribute("value"));
-        Assertions.assertEquals("10", sumField.getAttribute("value"));
-        Assertions.assertEquals("test@example.com", emailField.getAttribute("value"));
-
-        return paymentBlock;
     }
 
     @Test
     public void checkOnlineTopUpTitle() {
-        WebElement paymentBlock = scrollToPaymentBlock();
 
-        WebElement title = paymentBlock.findElement(By.tagName("h2"));
-
-        String actualTitle = title.getText()
-                .replaceAll("\\s+", " ")
-                .trim();
+        String actualTitle = mtsPage.getPaymentTitle();
 
         Assertions.assertEquals(
                 "ОНЛАЙН ПОПОЛНЕНИЕ БЕЗ КОМИССИИ",
@@ -112,15 +76,7 @@ public class BrowserTest {
 
     @Test
     public void checkPaymentLogos() {
-        WebElement paymentBlock = scrollToPaymentBlock();
-
-        WebElement partners = paymentBlock.findElement(
-                By.className("pay__partners")
-        );
-
-        List<WebElement> logos = partners.findElements(
-                By.cssSelector("img")
-        );
+        List<WebElement> logos = mtsPage.getPaymentLogos();
 
         Assertions.assertEquals(6, logos.size());
 
@@ -134,17 +90,9 @@ public class BrowserTest {
 
     @Test
     public void checkServiceDetailsLink() {
-        WebElement paymentBlock = scrollToPaymentBlock();
-
-        WebElement detailsLink = paymentBlock.findElement(
-                By.linkText("Подробнее о сервисе")
-        );
-
-        Assertions.assertTrue(detailsLink.isDisplayed());
-
         String originalUrl = driver.getCurrentUrl();
 
-        detailsLink.click();
+        mtsPage.clickServiceDetailsLink();
 
         assert originalUrl != null;
         wait.until(ExpectedConditions.not(
@@ -158,15 +106,10 @@ public class BrowserTest {
 
     @Test
     public void checkPaymentForm() {
-        WebElement paymentBlock = fillPaymentForm();
+        fillPaymentForm();
 
-        WebElement krokButton = paymentBlock.findElement(
-                By.cssSelector("button[data-method='krok']")
-        );
-
-        WebElement cardButton = paymentBlock.findElement(
-                By.cssSelector("button[data-method='card']")
-        );
+        WebElement krokButton = mtsPage.getKrokButton();
+        WebElement cardButton = mtsPage.getCardButton();
 
         Assertions.assertTrue(krokButton.isDisplayed());
         Assertions.assertTrue(krokButton.isEnabled());
@@ -177,16 +120,14 @@ public class BrowserTest {
 
     @Test
     public void checkKrokButton() {
-        WebElement paymentBlock = fillPaymentForm();
+        fillPaymentForm();
 
-        WebElement krokButton = paymentBlock.findElement(
-                By.cssSelector("button[data-method='krok']")
-        );
+        WebElement krokButton = mtsPage.getKrokButton();
 
         Assertions.assertTrue(krokButton.isDisplayed());
         Assertions.assertTrue(krokButton.isEnabled());
 
-        krokButton.click();
+        mtsPage.clickKrokButton();
 
         WebElement paymentFrame = wait.until(
                 ExpectedConditions.presenceOfElementLocated(
@@ -214,16 +155,14 @@ public class BrowserTest {
 
     @Test
     public void checkCardButton() {
-        WebElement paymentBlock = fillPaymentForm();
+        fillPaymentForm();
 
-        WebElement cardButton = paymentBlock.findElement(
-                By.cssSelector("button[data-method='card']")
-        );
+        WebElement cardButton = mtsPage.getCardButton();
 
         Assertions.assertTrue(cardButton.isDisplayed());
         Assertions.assertTrue(cardButton.isEnabled());
 
-        cardButton.click();
+        mtsPage.clickCardButton();
 
         WebElement paymentFrame = wait.until(
                 ExpectedConditions.presenceOfElementLocated(
@@ -244,6 +183,112 @@ public class BrowserTest {
         driver.switchTo().defaultContent();
     }
 
+    @ParameterizedTest
+    @CsvSource({
+            "'Услуги связи', 'Номер телефона', 'Сумма', 'E-mail для отправки чека'",
+            "'Домашний интернет', 'Номер абонента', 'Сумма', 'E-mail для отправки чека'",
+            "'Рассрочка', 'Номер счета на 44', 'Сумма', 'E-mail для отправки чека'",
+            "'Задолженность', 'Номер счета на 2073', 'Сумма', 'E-mail для отправки чека'"
+    })
+    public void checkPaymentPlaceholders(
+            String paymentType,
+            String firstField,
+            String secondField,
+            String thirdField
+    ) {
+        mtsPage.selectPaymentType(paymentType);
+
+        List<String> actualPlaceholders =
+                mtsPage.getPaymentFieldPlaceholders();
+
+        Assertions.assertEquals(
+                List.of(firstField, secondField, thirdField),
+                actualPlaceholders
+        );
+    }
+
+    @Test
+    public void checkCardPaymentWindow() {
+        mtsPage.fillPaymentForm(
+                "297777777",
+                "10",
+                "test@example.com"
+        );
+
+        mtsPage.clickCardButton();
+
+        WebElement paymentFrame = wait.until(
+                ExpectedConditions.presenceOfElementLocated(
+                        By.cssSelector("iframe.payment-widget-iframe")
+                )
+        );
+
+        driver.switchTo().frame(paymentFrame);
+
+        WebElement paymentAmount = wait.until(
+                ExpectedConditions.visibilityOfElementLocated(
+                        By.xpath("//*[contains(text(), '10.00 BYN')]")
+                )
+        );
+
+        Assertions.assertTrue(paymentAmount.isDisplayed());
+    }
+
+    @Test
+    public void checkCardPaymentDetails() {
+        fillPaymentForm();
+
+        mtsPage.clickCardButton();
+        mtsPage.switchToCardPaymentFrame();
+
+        try {
+            Assertions.assertEquals(
+                    "10.00 BYN",
+                    mtsPage.getPaymentAmount()
+            );
+
+            String paymentDescription = mtsPage.getPaymentDescription();
+
+            Assertions.assertTrue(
+                    paymentDescription.contains("Услуги связи"),
+                    paymentDescription
+            );
+
+            Assertions.assertTrue(
+                    paymentDescription.contains("375297777777"),
+                    paymentDescription
+            );
+
+            Assertions.assertEquals(
+                    List.of(
+                            "Номер карты",
+                            "Срок действия",
+                            "CVC",
+                            "Имя и фамилия на карте",
+                            "Сохранить данные карты для последующих оплат"
+                    ),
+                    mtsPage.getCardFieldLabels()
+            );
+
+            List<WebElement> cardIcons = mtsPage.getCardIcons();
+
+            long displayedIcons = cardIcons.stream()
+                    .filter(WebElement::isDisplayed)
+                    .count();
+
+            Assertions.assertTrue(
+                    displayedIcons >= 3,
+                    "Отображается меньше трёх иконок платёжных систем"
+            );
+
+            Assertions.assertTrue(
+                    mtsPage.getPayButtonText().contains("10.00 BYN")
+            );
+
+        } finally {
+            mtsPage.switchToDefaultContent();
+        }
+    }
 
     @AfterEach
     public void tearDown() {
