@@ -20,6 +20,14 @@ import java.util.Objects;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import io.qameta.allure.Description;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Story;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
+import org.junit.jupiter.api.DisplayName;
+
+@Feature("Онлайн пополнение без комиссии")
 public class BrowserTest {
 
     private WebDriver driver;
